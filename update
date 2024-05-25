@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# If started as root, then re-start as user "gavenkoa":
+if [ "$(id -u)" -eq 0 ]; then
+    exec sudo -H -u bo $0 "$@"
+    echo "This is never reached.";
+fi
+
 # Directory containing wallpapers
 WALLPAPER_DIR=~/wallpapers
 
