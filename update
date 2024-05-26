@@ -28,7 +28,7 @@ SCREEN_RESOLUTION=$(xrandr | grep -A1 "^$PRIMARY_DISPLAY" | tail -n1 | sed -n 's
 SCREEN_WIDTH=$(echo $SCREEN_RESOLUTION | cut -d'x' -f1)
 SCREEN_HEIGHT=$(echo $SCREEN_RESOLUTION | cut -d'x' -f2)
 
-# print the resolution of the primary display
+# Print the resolution of the primary display
 echo "Resolution of the primary display: $SCREEN_RESOLUTION"
 
 # Move new images to respective directories
@@ -87,10 +87,16 @@ RESIZED_IMAGES=()
 for IMAGE in $SELECTED_IMAGES; do
     if [ -f "$IMAGE" ]; then
         BASENAME=$(basename "$IMAGE")
-        RESIZED_IMAGE="$RESIZED_DIR/resized_$BASENAME"
+        EXTENSION="${BASENAME##*.}"
+        BASENAME_NO_EXT="${BASENAME%.*}"
+        RESIZED_IMAGE="$RESIZED_DIR/resized_$BASENAME_NO_EXT.png"
         if [ ! -f "$RESIZED_IMAGE" ]; then
             echo "Resizing $IMAGE..."
-            convert "$IMAGE" -resize "${TARGET_WIDTH}x${TARGET_HEIGHT}" -background white -gravity center -extent ${TARGET_WIDTH}x${TARGET_HEIGHT} "$RESIZED_IMAGE"
+            if [ "$EXTENSION" == "heic" ] || [ "$EXTENSION" == "HEIC" ]; then
+                convert "$IMAGE" -resize "${TARGET_WIDTH}x${TARGET_HEIGHT}" -background white -gravity center -extent ${TARGET_WIDTH}x${TARGET_HEIGHT} -colorspace sRGB "$RESIZED_IMAGE"
+            else
+                convert "$IMAGE" -resize "${TARGET_WIDTH}x${TARGET_HEIGHT}" -background white -gravity center -extent ${TARGET_WIDTH}x${TARGET_HEIGHT} -colorspace sRGB "$RESIZED_IMAGE"
+            fi
         else
             echo "Using cached resized image for $IMAGE..."
         fi
