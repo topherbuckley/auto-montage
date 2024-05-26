@@ -8,10 +8,19 @@ fi
 
 # Directory containing wallpapers
 WALLPAPER_DIR=~/wallpapers
+LANDSCAPE_DIR=~/wallpapers/landscape
+PORTRAIT_DIR=~/wallpapers/portrait
 
-# Temporary directory for storing resized images and the collage
-TEMP_DIR=~/temp_wallpapers
-mkdir -p "$TEMP_DIR"
+# Directory for storing resized images and the collage
+RESIZED_DIR=~/resized_wallpapers
+COLLAGE_DIR=~/temp_wallpapers
+mkdir -p "$RESIZED_DIR"
+mkdir -p "$COLLAGE_DIR"
+mkdir -p "$LANDSCAPE_DIR"
+mkdir -p "$PORTRAIT_DIR"
+
+# Log file for images used in the collage
+LOG_FILE="$COLLAGE_DIR/collage_images.log"
 
 # Get the resolution of the primary display using xrandr
 PRIMARY_DISPLAY=$(xrandr | grep " connected primary" | cut -d' ' -f1)
@@ -22,21 +31,23 @@ SCREEN_HEIGHT=$(echo $SCREEN_RESOLUTION | cut -d'x' -f2)
 # print the resolution of the primary display
 echo "Resolution of the primary display: $SCREEN_RESOLUTION"
 
-# Separate landscape and portrait images
-LANDSCAPE_IMAGES=()
-PORTRAIT_IMAGES=()
-
+# Move new images to respective directories
 for IMAGE in "$WALLPAPER_DIR"/*; do
-    WIDTH=$(identify -format "%w" "$IMAGE")
-    HEIGHT=$(identify -format "%h" "$IMAGE")
-    if [ "$WIDTH" -gt "$HEIGHT" ]; then
-        LANDSCAPE_IMAGES+=("$IMAGE")
-    else
-        PORTRAIT_IMAGES+=("$IMAGE")
+    if [ -f "$IMAGE" ]; then
+        WIDTH=$(identify -format "%w" "$IMAGE")
+        HEIGHT=$(identify -format "%h" "$IMAGE")
+        if [ "$WIDTH" -gt "$HEIGHT" ]; then
+            mv "$IMAGE" "$LANDSCAPE_DIR/"
+        else
+            mv "$IMAGE" "$PORTRAIT_DIR/"
+        fi
     fi
 done
 
-ORIENTATION="landscape"
+# Collect landscape and portrait images
+LANDSCAPE_IMAGES=("$LANDSCAPE_DIR"/*)
+PORTRAIT_IMAGES=("$PORTRAIT_DIR"/*)
+
 # Randomly choose to use either landscape or portrait images
 if [ $((RANDOM % 2)) -eq 0 ]; then
     IMAGES=("${LANDSCAPE_IMAGES[@]}")
@@ -49,16 +60,6 @@ else
     GRID_ROWS=2
     ORIENTATION="portrait"
 fi
-#tmp override for debugging
-#IMAGES=("${LANDSCAPE_IMAGES[@]}")
-#GRID_COLUMNS=4
-#GRID_ROWS=3
-#ORIENTATION="landscape"
-
-#IMAGES=("${PORTRAIT_IMAGES[@]}")
-#GRID_COLUMNS=5
-#GRID_ROWS=2
-#ORIENTATION="portrait"
 
 echo "Orientation: $ORIENTATION"
 echo "Number of rows in the grid: $GRID_ROWS"
@@ -77,17 +78,31 @@ TARGET_HEIGHT=$((SCREEN_HEIGHT / GRID_ROWS))
 echo "Target width: $TARGET_WIDTH"
 echo "Target height: $TARGET_HEIGHT"
 
+# Clear previous log and collage
+rm -f "$LOG_FILE"
+rm -f "$COLLAGE_DIR/collage.png"
+
 # Resize images to fit within the target size while maintaining aspect ratio
 RESIZED_IMAGES=()
 for IMAGE in $SELECTED_IMAGES; do
-    BASENAME=$(basename "$IMAGE")
-    RESIZED_IMAGE="$TEMP_DIR/resized_$BASENAME"
-    convert "$IMAGE" -resize "${TARGET_WIDTH}x${TARGET_HEIGHT}" -background white -gravity center -extent ${TARGET_WIDTH}x${TARGET_HEIGHT} "$RESIZED_IMAGE"
-    RESIZED_IMAGES+=("$RESIZED_IMAGE")
+    if [ -f "$IMAGE" ]; then
+        BASENAME=$(basename "$IMAGE")
+        RESIZED_IMAGE="$RESIZED_DIR/resized_$BASENAME"
+        if [ ! -f "$RESIZED_IMAGE" ]; then
+            echo "Resizing $IMAGE..."
+            convert "$IMAGE" -resize "${TARGET_WIDTH}x${TARGET_HEIGHT}" -background white -gravity center -extent ${TARGET_WIDTH}x${TARGET_HEIGHT} "$RESIZED_IMAGE"
+        else
+            echo "Using cached resized image for $IMAGE..."
+        fi
+        RESIZED_IMAGES+=("$RESIZED_IMAGE")
+        echo "$IMAGE" >> "$LOG_FILE"
+    else
+        echo "Warning: Image $IMAGE does not exist and will be skipped."
+    fi
 done
 
 # Create a collage of the resized images
-COLLAGE="$TEMP_DIR/collage.png"
+COLLAGE="$COLLAGE_DIR/collage.png"
 montage "${RESIZED_IMAGES[@]}" -tile ${GRID_COLUMNS}x${GRID_ROWS} -geometry +0+0 "$COLLAGE"
 
 echo "montage made with ${GRID_ROWS}x${GRID_COLUMNS} grid"
@@ -95,8 +110,19 @@ echo "montage made with ${GRID_ROWS}x${GRID_COLUMNS} grid"
 # Ensure the collage is exactly the screen resolution
 convert "$COLLAGE" -resize ${SCREEN_WIDTH}x${SCREEN_HEIGHT} -gravity center -background black -extent ${SCREEN_WIDTH}x${SCREEN_HEIGHT} "$COLLAGE"
 
+# Update the timestamp of the collage to refresh the cache
+touch "$COLLAGE"
+
+# Print the path that will be used by gsettings
+COLLAGE_URI="file:///$COLLAGE"
+echo "Setting background with URI: $COLLAGE_URI"
+
 # Set the collage as the desktop background
-gsettings set org.gnome.desktop.background picture-uri "file://$COLLAGE"
+gsettings set org.gnome.desktop.background picture-uri "$COLLAGE_URI"
+
+# Refresh GNOME desktop background by toggling the setting
+gsettings set org.gnome.desktop.background picture-uri "file:///tmp"
+gsettings set org.gnome.desktop.background picture-uri "$COLLAGE_URI"
 
 # Clean up temporary resized images
-rm "${RESIZED_IMAGES[@]}"
+# rm "${RESIZED_IMAGES[@]}" # Commenting this line to keep the resized images for reuse
