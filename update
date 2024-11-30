@@ -22,11 +22,11 @@ mkdir -p "$PORTRAIT_DIR"
 # Log file for images used in the collage
 LOG_FILE="$COLLAGE_DIR/collage_images.log"
 
-# Get the resolution of the primary display using xrandr
-PRIMARY_DISPLAY=$(xrandr | grep " connected primary" | cut -d' ' -f1)
-SCREEN_RESOLUTION=$(xrandr | grep -A1 "^$PRIMARY_DISPLAY" | tail -n1 | sed -n 's/.* \([0-9]\+x[0-9]\+\) .*/\1/p')
-SCREEN_WIDTH=$(echo $SCREEN_RESOLUTION | cut -d'x' -f1)
-SCREEN_HEIGHT=$(echo $SCREEN_RESOLUTION | cut -d'x' -f2)
+# Get the resolution of the secondary display using xrandr
+SECONDARY_DISPLAY=$(xrandr | grep " connected" | grep -v "primary" | cut -d' ' -f1)
+SCREEN_RESOLUTION=$(xrandr | grep -A1 "^$SECONDARY_DISPLAY" | tail -n1 | sed -n 's/.* \([0-9]\+x[0-9]\+\) .*/\1/p')
+SCREEN_WIDTH=$(echo $SCREEN_RESOLUTION | cut -d'x' -f2)
+SCREEN_HEIGHT=$(echo $SCREEN_RESOLUTION | cut -d'x' -f1)
 
 # Print the resolution of the primary display
 echo "Resolution of the primary display: $SCREEN_RESOLUTION"
@@ -124,11 +124,7 @@ COLLAGE_URI="file:///$COLLAGE"
 echo "Setting background with URI: $COLLAGE_URI"
 
 # Set the collage as the desktop background
-gsettings set org.gnome.desktop.background picture-uri "$COLLAGE_URI"
-
-# Refresh GNOME desktop background by toggling the setting
-gsettings set org.gnome.desktop.background picture-uri "file:///tmp"
-gsettings set org.gnome.desktop.background picture-uri "$COLLAGE_URI"
+feh --output "$SECONDARY_DISPLAY" --bg-scale "$COLLAGE"
 
 # Clean up temporary resized images
 # rm "${RESIZED_IMAGES[@]}" # Commenting this line to keep the resized images for reuse
